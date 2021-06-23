@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
+import argparse
+
 import math, os, time
 from ev3dev.ev3 import *
+
+#from ev3dev2.motor import OUTPUT_A, OUTPUT_B, OUTPUT_C, MediumMotor, LargeMotor, Motor
+#from ev3dev2.sensor import INPUT_3, INPUT_2
+#from ev3dev2.sensor.lego import TouchSensor
 
 from svg.parser import parse_path
 from svg.path import Line
@@ -36,7 +42,7 @@ class mymotor(Motor):
 
     def goto_position(self, position, speed=480, up=0, down=0, regulate='on', stop_command='brake', wait=0):
         self.stop_action = stop_command
-        self.speed_regulation = regulate
+        #self.speed_regulation = regulate
         self.ramp_up_sp,self.ramp_down_sp = up,down
         if regulate=='on':
             self.speed_sp = speed
@@ -67,10 +73,13 @@ class mymotor(Motor):
 class Writer():
 
     def __init__(self, calibrate=True):
-        self.mot_A    = mymotor(OUTPUT_C)
-        self.mot_B    = mymotor(OUTPUT_A)
+        self.mot_A    = mymotor(OUTPUT_A)
+        self.mot_B    = mymotor(OUTPUT_C)
 
         self.mot_lift = mymotor(OUTPUT_B)
+
+        self.pos_pen_down = -300
+        self.pos_pen_up = -600
 
         self.touch_A  = TouchSensor(INPUT_3)
         self.touch_B  = TouchSensor(INPUT_2)
@@ -80,17 +89,17 @@ class Writer():
         self.pen_up()
 
     def pen_up (self, wait=1):
-        self.mot_lift.goto_position(40, 30, regulate = 'off', stop_command='brake', wait = wait)
+        self.mot_lift.goto_position(self.pos_pen_up, speed=30, regulate = 'off', stop_command='brake', wait = wait)
         if wait:
             time.sleep(0.1)
 
     def pen_down(self, wait=1):
-        self.mot_lift.goto_position(0, 30, regulate = 'off', stop_command='brake', wait = wait)
+        self.mot_lift.goto_position(self.pos_pen_down, speed=30, regulate = 'off', stop_command='brake', wait = wait)
         if wait:
             time.sleep(0.1)
 
-    def calibrate (self):
-        self.mot_lift.rotate_forever(speed=-50, regulate='off')
+    def calibrate_lift_arm (self):
+        self.mot_lift.rotate_forever(speed=25, regulate='off')
         time.sleep(0.5)
         while(abs(self.mot_lift.speed) > 5):
             time.sleep(0.001)
@@ -98,12 +107,16 @@ class Writer():
         time.sleep(0.1)
         self.mot_lift.reset_position()
         time.sleep(0.1)
-        self.mot_lift.goto_position(40, speed=400, regulate='on', stop_command='brake', wait=1)
+        self.mot_lift.goto_position(self.pos_pen_up, speed=400, regulate='on', stop_command='brake', wait=1)
         time.sleep(0.1)
-        self.mot_lift.reset_position()
+        #self.mot_lift.reset_position()
         time.sleep(1)
 
         self.pen_up()
+
+    def calibrate (self):
+
+        self.calibrate_lift_arm()
 
         self.mot_A.reset_position()
         self.mot_B.reset_position()
@@ -118,6 +131,7 @@ class Writer():
         start = time.time()
         while True:
             touch_A, touch_B = self.touch_A.value(), self.touch_B.value()
+            print("{}: {} | {}".format(time.time(), touch_A, touch_B))
             if (not stop_A and touch_A):
                 pos = self.mot_A.position
                 self.mot_A.stop()
@@ -192,7 +206,7 @@ class Writer():
             if xIA > xIA2:
                 xIA = xIA2
                 yIA = yIA2
-            ((xIB, yIB), (xIB2, yIA2)) = Writer.get_coord_intersec (xE, yE, Writer.xB, Writer.yB, Writer.r1, Writer.r2)
+            ((xIB, yIB), (xIB2, yIB2)) = Writer.get_coord_intersec (xE, yE, Writer.xB, Writer.yB, Writer.r1, Writer.r2)
             if xIB < xIB2:
                 xIB = xIB2
                 yIB = yIB2
@@ -350,7 +364,7 @@ class Writer():
 
         itemlist = xmldoc.getElementsByTagName('path')
         try:
-            itemlist = filter(lambda x: x.attributes['id'].value != "borders", itemlist)
+            itemlist = filter(lambda x: 'id' in x.attributes and x.attributes['id'].value != "borders", itemlist)
         except:
             pass
         path = [s.attributes['d'].value for s in itemlist]
@@ -469,9 +483,16 @@ class Writer():
             time.sleep(0.1)
 
 def main():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-f", "--file", type=str,
+                            help="use this svg", required = True)
+    args = parser.parse_args()
+
     wri = Writer(calibrate = True)
     wri.pen_up()
-    wri.draw_image(image_file = 'images/test.svg',max_speed=35)
+
+    wri.draw_image(image_file = args.file, max_speed=34)
     #wri.follow_mouse()
     wri.pen_up()
 
